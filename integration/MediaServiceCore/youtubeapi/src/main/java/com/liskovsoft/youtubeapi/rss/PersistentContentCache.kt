@@ -54,10 +54,9 @@ internal class PersistentContentCache<T : Any>(
 
         try {
             stream = atomicFile.startWrite()
-            stream.writer(Charsets.UTF_8).use { writer ->
-                gson.toJson(value, writer)
-                writer.flush()
-            }
+            val writer = stream.writer(Charsets.UTF_8)
+            gson.toJson(value, writer)
+            writer.flush()
             atomicFile.finishWrite(stream)
         } catch (e: Exception) {
             if (stream != null) {
