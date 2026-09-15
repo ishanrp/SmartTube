@@ -31,6 +31,9 @@ jobs:
       - name: Grant Gradle permissions
         run: chmod +x gradlew
 
+      - name: Test RSS cache models
+        run: ./gradlew :youtubeapi:testStbetaDebugUnitTest --tests com.liskovsoft.youtubeapi.rss.RssCacheModelsTest
+
       - name: Build installable debug APK
         run: ./gradlew clean assembleStbetaDebug
 
