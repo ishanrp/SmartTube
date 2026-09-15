@@ -1,5 +1,6 @@
 package com.liskovsoft.youtubeapi.rss
 
+import android.util.AtomicFile
 import com.google.gson.Gson
 import com.liskovsoft.youtubeapi.app.AppService
 import java.io.File
@@ -29,44 +30,46 @@ internal class PersistentContentCache<T : Any>(
 
     @Synchronized
     fun load(key: String): T? {
-        val file = fileForKey(key)
-        if (!file.isFile) {
+        val target = fileForKey(key)
+        val atomicFile = AtomicFile(target)
+
+        if (!target.isFile && !File(target.path + ".bak").isFile) {
             return null
         }
 
         return try {
-            gson.fromJson(file.readText(), type)
+            atomicFile.openRead().bufferedReader().use { reader ->
+                gson.fromJson(reader, type)
+            }
         } catch (e: Exception) {
-            file.delete()
+            atomicFile.delete()
             null
         }
     }
 
     @Synchronized
     fun save(key: String, value: T) {
-        val target = fileForKey(key)
-        val temp = File(target.parentFile, target.name + ".tmp")
+        val atomicFile = AtomicFile(fileForKey(key))
+        var stream: java.io.FileOutputStream? = null
 
         try {
-            temp.writeText(gson.toJson(value))
-
-            if (target.exists()) {
-                target.delete()
+            stream = atomicFile.startWrite()
+            stream.writer(Charsets.UTF_8).use { writer ->
+                gson.toJson(value, writer)
+                writer.flush()
             }
-
-            if (!temp.renameTo(target)) {
-                target.writeText(temp.readText())
-                temp.delete()
-            }
+            atomicFile.finishWrite(stream)
         } catch (e: Exception) {
-            temp.delete()
+            if (stream != null) {
+                atomicFile.failWrite(stream)
+            }
             e.printStackTrace()
         }
     }
 
     @Synchronized
     fun delete(key: String) {
-        fileForKey(key).delete()
+        AtomicFile(fileForKey(key)).delete()
     }
 
     @Synchronized
@@ -115,7 +118,7 @@ internal class PersistentContentCache<T : Any>(
         var veryStale = 0
 
         directory.listFiles()?.forEach { file ->
-            if (file.isFile && !file.name.endsWith(".tmp")) {
+            if (file.isFile && file.name.endsWith(".json")) {
                 count++
                 bytes += file.length()
 
