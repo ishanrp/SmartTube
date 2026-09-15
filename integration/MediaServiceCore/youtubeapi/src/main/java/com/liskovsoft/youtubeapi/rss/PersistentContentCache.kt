@@ -62,6 +62,11 @@ internal class PersistentContentCache<T : Any>(
     }
 
     @Synchronized
+    fun delete(key: String) {
+        fileForKey(key).delete()
+    }
+
+    @Synchronized
     fun clear() {
         directory.listFiles()?.forEach { it.delete() }
     }

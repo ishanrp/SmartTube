@@ -4,6 +4,7 @@ import com.liskovsoft.mediaserviceinterfaces.data.MediaItem
 import com.liskovsoft.youtubeapi.service.data.YouTubeMediaItem
 
 internal data class RssCacheEntry(
+    val schemaVersion: Int,
     val fetchedAtMs: Long,
     val items: List<CachedRssItem>
 )

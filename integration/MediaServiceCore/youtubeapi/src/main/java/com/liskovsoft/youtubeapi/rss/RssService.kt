@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger
 internal object RssService {
     private const val RSS_URL: String = "https://www.youtube.com/feeds/videos.xml?channel_id="
     private const val MAX_ITEMS = 100
+    private const val CACHE_SCHEMA_VERSION = 1
     private const val FRESH_TTL_MS = 10 * 60 * 1000L
     private const val STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000L
     private const val DISK_RETENTION_MS = 30 * 24 * 60 * 60 * 1000L
@@ -136,7 +137,7 @@ internal object RssService {
     @JvmStatic
     fun getDiagnostics(): RssDiagnostics {
         val now = System.currentTimeMillis()
-        val entries = diskCache.loadAll()
+        val entries = diskCache.loadAll().filter { it.schemaVersion == CACHE_SCHEMA_VERSION }
         val diskStats = diskCache.stats()
 
         var fresh = 0
@@ -266,7 +267,9 @@ internal object RssService {
             if (fresh != null && storeFresh(channelId, fresh, lockedCached)) {
                 fresh
             } else {
-                markFailure(channelId)
+                if (RssRuntimeState.canRequest()) {
+                    markFailure(channelId)
+                }
                 lockedCached?.let(::materialize)
             }
         }
@@ -317,7 +320,9 @@ internal object RssService {
             if (fresh != null && storeFresh(channelId, fresh, cached)) {
                 true
             } else {
-                markFailure(channelId)
+                if (RssRuntimeState.canRequest()) {
+                    markFailure(channelId)
+                }
                 false
             }
         }
@@ -420,6 +425,7 @@ internal object RssService {
         }
 
         val entry = RssCacheEntry(
+            schemaVersion = CACHE_SCHEMA_VERSION,
             fetchedAtMs = System.currentTimeMillis(),
             items = items.map(CachedRssItem::fromMediaItem)
         )
@@ -449,6 +455,12 @@ internal object RssService {
         }
 
         val disk = diskCache.load(channelId) ?: return null
+
+        if (disk.schemaVersion != CACHE_SCHEMA_VERSION) {
+            diskCache.delete(channelId)
+            return null
+        }
+
         val previous = feedCache.putIfAbsent(channelId, disk)
         return previous ?: disk
     }

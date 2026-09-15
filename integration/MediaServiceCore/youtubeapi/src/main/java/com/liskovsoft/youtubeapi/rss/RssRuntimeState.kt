@@ -14,7 +14,6 @@ internal object RssRuntimeState {
     private const val KEY_LAST_ISSUE = "last_issue"
     private const val KEY_LAST_ISSUE_AT = "last_issue_at"
     private const val KEY_LAST_SUCCESS = "last_success"
-    private const val KEY_FEED_MODE = "feed_mode"
     private const val KEY_429_FAILURES = "http_429_failures"
     private const val KEY_TIMEOUT_FAILURES = "timeout_failures"
     private const val KEY_OTHER_FAILURES = "other_failures"
@@ -36,6 +35,13 @@ internal object RssRuntimeState {
     private val prefs by lazy {
         AppService.instance().context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
+
+    @Volatile
+    private var currentFeedMode = "None"
+    private var lastSuccessMs = 0L
+    private var lastSuccessPersistMs = 0L
+    private var lastEventMessage: String? = null
+    private var lastEventAtMs = 0L
 
     @Synchronized
     fun getParallelRequests(): Int {
@@ -61,15 +67,28 @@ internal object RssRuntimeState {
         val now = System.currentTimeMillis()
         val backoffUntil = prefs.getLong(KEY_BACKOFF_UNTIL, 0)
         val backoffLevel = prefs.getInt(KEY_BACKOFF_LEVEL, 0)
-        val editor = prefs.edit().putLong(KEY_LAST_SUCCESS, now)
+        val editor = prefs.edit()
+        var persist = false
+
+        lastSuccessMs = now
+
+        if (now - lastSuccessPersistMs >= 60_000) {
+            lastSuccessPersistMs = now
+            editor.putLong(KEY_LAST_SUCCESS, now)
+            persist = true
+        }
 
         if (backoffLevel > 0 && now >= backoffUntil) {
             editor.putInt(KEY_BACKOFF_LEVEL, 0)
                 .putLong(KEY_BACKOFF_UNTIL, 0)
+                .putLong(KEY_LAST_SUCCESS, now)
+            persist = true
             addEvent("RSS requests recovered")
         }
 
-        editor.apply()
+        if (persist) {
+            editor.apply()
+        }
     }
 
     @Synchronized
@@ -124,13 +143,22 @@ internal object RssRuntimeState {
 
     @Synchronized
     fun recordFeedMode(mode: String) {
-        prefs.edit().putString(KEY_FEED_MODE, mode).apply()
+        currentFeedMode = mode
     }
 
     @Synchronized
     fun addEvent(message: String) {
+        val now = System.currentTimeMillis()
+
+        if (message == lastEventMessage && now - lastEventAtMs < 10_000) {
+            return
+        }
+
+        lastEventMessage = message
+        lastEventAtMs = now
+
         val events = loadEvents().toMutableList()
-        events.add(System.currentTimeMillis().toString() + "|" + message)
+        events.add(now.toString() + "|" + message)
 
         while (events.size > EVENT_LIMIT) {
             events.removeAt(0)
@@ -165,10 +193,11 @@ internal object RssRuntimeState {
     fun lastIssue(): String? = prefs.getString(KEY_LAST_ISSUE, null)
 
     @Synchronized
-    fun lastSuccessfulFetchMs(): Long = prefs.getLong(KEY_LAST_SUCCESS, 0)
+    fun lastSuccessfulFetchMs(): Long =
+        maxOf(lastSuccessMs, prefs.getLong(KEY_LAST_SUCCESS, 0))
 
     @Synchronized
-    fun feedMode(): String = prefs.getString(KEY_FEED_MODE, "None") ?: "None"
+    fun feedMode(): String = currentFeedMode
 
     @Synchronized
     fun http429Failures(): Int = prefs.getInt(KEY_429_FAILURES, 0)
