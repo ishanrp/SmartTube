@@ -135,24 +135,15 @@ internal object RssService {
     }
 
     @JvmStatic
+    fun getStatus(): String = RssRuntimeState.status()
+
+    @JvmStatic
+    fun getBackoffRemainingMs(): Long = RssRuntimeState.backoffRemainingMs()
+
+    @JvmStatic
     fun getDiagnostics(): RssDiagnostics {
         val now = System.currentTimeMillis()
-        val entries = diskCache.loadAll().filter { it.schemaVersion == CACHE_SCHEMA_VERSION }
-        val diskStats = diskCache.stats()
-
-        var fresh = 0
-        var stale = 0
-        var veryStale = 0
-
-        entries.forEach { entry ->
-            val age = now - entry.fetchedAtMs
-
-            when {
-                age <= FRESH_TTL_MS -> fresh++
-                age <= STALE_TTL_MS -> stale++
-                else -> veryStale++
-            }
-        }
+        val diskStats = diskCache.stats(FRESH_TTL_MS, STALE_TTL_MS, now)
 
         return RssDiagnostics(
             status = RssRuntimeState.status(now),
@@ -166,9 +157,9 @@ internal object RssService {
             feedMode = RssRuntimeState.feedMode(),
             memoryEntries = feedCache.size,
             diskEntries = diskStats.entryCount,
-            freshEntries = fresh,
-            staleEntries = stale,
-            veryStaleEntries = veryStale,
+            freshEntries = diskStats.freshEntries,
+            staleEntries = diskStats.staleEntries,
+            veryStaleEntries = diskStats.veryStaleEntries,
             diskBytes = diskStats.bytes,
             http429Failures = RssRuntimeState.http429Failures(),
             timeoutFailures = RssRuntimeState.timeoutFailures(),

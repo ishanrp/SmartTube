@@ -5,6 +5,10 @@ on:
     branches: [ "subscription-cache-v2" ]
   workflow_dispatch:
 
+concurrency:
+  group: subscription-cache-v2-test
+  cancel-in-progress: true
+
 jobs:
   build-test-apk:
     runs-on: ubuntu-latest

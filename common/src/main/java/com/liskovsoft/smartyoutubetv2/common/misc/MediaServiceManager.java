@@ -133,6 +133,14 @@ public class MediaServiceManager implements OnAccountChange {
         YouTubeServiceManager.setRssParallelRequests(value);
     }
 
+    public String getRssStatus() {
+        return YouTubeServiceManager.getRssStatus();
+    }
+
+    public long getRssBackoffRemainingMs() {
+        return YouTubeServiceManager.getRssBackoffRemainingMs();
+    }
+
     public RssDiagnostics getRssDiagnostics() {
         return YouTubeServiceManager.getRssDiagnostics();
     }

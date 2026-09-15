@@ -666,11 +666,18 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
     }
 
     private void appendNetworkDiagnostics(AppDialogPresenter settingsPresenter) {
-        RssDiagnostics diagnostics = MediaServiceManager.instance().getRssDiagnostics();
+        MediaServiceManager serviceManager = MediaServiceManager.instance();
+        String status = getRssStatusText(serviceManager.getRssStatus());
+        long backoffMs = serviceManager.getRssBackoffRemainingMs();
+
+        if (backoffMs > 0) {
+            status += " (" + formatDuration(backoffMs) + ")";
+        }
+
         String title = String.format(
                 "%s: %s",
                 getContext().getString(R.string.network_diagnostics),
-                getRssStatusText(diagnostics.getStatus()));
+                status);
 
         settingsPresenter.appendSingleButton(UiOptionItem.from(
                 title,

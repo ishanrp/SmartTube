@@ -7,7 +7,10 @@ import java.security.MessageDigest
 
 internal data class PersistentCacheStats(
     val entryCount: Int,
-    val bytes: Long
+    val bytes: Long,
+    val freshEntries: Int,
+    val staleEntries: Int,
+    val veryStaleEntries: Int
 )
 
 internal class PersistentContentCache<T : Any>(
@@ -100,18 +103,32 @@ internal class PersistentContentCache<T : Any>(
     }
 
     @Synchronized
-    fun stats(): PersistentCacheStats {
+    fun stats(
+        freshTtlMs: Long,
+        staleTtlMs: Long,
+        nowMs: Long = System.currentTimeMillis()
+    ): PersistentCacheStats {
         var count = 0
         var bytes = 0L
+        var fresh = 0
+        var stale = 0
+        var veryStale = 0
 
         directory.listFiles()?.forEach { file ->
             if (file.isFile && !file.name.endsWith(".tmp")) {
                 count++
                 bytes += file.length()
+
+                val age = nowMs - file.lastModified()
+                when {
+                    age <= freshTtlMs -> fresh++
+                    age <= staleTtlMs -> stale++
+                    else -> veryStale++
+                }
             }
         }
 
-        return PersistentCacheStats(count, bytes)
+        return PersistentCacheStats(count, bytes, fresh, stale, veryStale)
     }
 
     private fun fileForKey(key: String): File {

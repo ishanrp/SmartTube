@@ -57,6 +57,14 @@ public class YouTubeServiceManager implements ServiceManager {
         RssService.setParallelRequests(value);
     }
 
+    public static String getRssStatus() {
+        return RssService.getStatus();
+    }
+
+    public static long getRssBackoffRemainingMs() {
+        return RssService.getBackoffRemainingMs();
+    }
+
     public static RssDiagnostics getRssDiagnostics() {
         return RssService.getDiagnostics();
     }
