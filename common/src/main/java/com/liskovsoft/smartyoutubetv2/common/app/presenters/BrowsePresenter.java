@@ -622,7 +622,9 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
     }
 
     public void refresh(boolean focusOnContent) {
-        updateCurrentSection();
+        boolean preserveContent = invalidateLocalGroupCache();
+        updateCurrentSection(preserveContent);
+
         if (focusOnContent && getView() != null) {
             getView().focusOnContent();
         }
@@ -633,6 +635,10 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
     }
 
     private void updateCurrentSection() {
+        updateCurrentSection(false);
+    }
+
+    private void updateCurrentSection(boolean preserveContent) {
         disposeActions();
 
         if (getView() == null || mCurrentSection == null) {
@@ -640,16 +646,21 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
         }
 
         Log.d(TAG, "Update section %s", mCurrentSection.getTitle());
-        updateSection(mCurrentSection);
+        updateSection(mCurrentSection, preserveContent);
     }
 
     private void updateSection(BrowseSection section) {
+        updateSection(section, false);
+    }
+
+    private void updateSection(BrowseSection section, boolean preserveContent) {
         switch (section.getType()) {
             case BrowseSection.TYPE_GRID:
             case BrowseSection.TYPE_SHORTS_GRID:
                 if (mGridMapping.containsKey(section.getId())) {
                     Observable<MediaGroup> group = mGridMapping.get(section.getId());
-                    updateVideoGrid(section, group, section.isAuthOnly());
+                    updateVideoGrid(section, group, section.isAuthOnly(),
+                            preserveContent && isLocalChannelGroupSection(section));
                 } else if (mLocalGridMappings.containsKey(section.getId())) {
                     Callable<List<Video>> localVideos = mLocalGridMappings.get(section.getId());
                     updateLocalGrid(section, localVideos);
@@ -696,13 +707,21 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
     }
 
     private void updateVideoGrid(BrowseSection section, Observable<MediaGroup> group, boolean authCheck) {
-        updateVideoGrid(section, group, -1, authCheck);
+        updateVideoGrid(section, group, -1, authCheck, false);
+    }
+
+    private void updateVideoGrid(BrowseSection section, Observable<MediaGroup> group, boolean authCheck, boolean preserveExisting) {
+        updateVideoGrid(section, group, -1, authCheck, preserveExisting);
     }
 
     private void updateVideoGrid(BrowseSection section, Observable<MediaGroup> group, int column, boolean authCheck) {
+        updateVideoGrid(section, group, column, authCheck, false);
+    }
+
+    private void updateVideoGrid(BrowseSection section, Observable<MediaGroup> group, int column, boolean authCheck, boolean preserveExisting) {
         Log.d(TAG, "loadMultiGridHeader: Start loading section: " + section.getTitle());
 
-        authCheck(authCheck, () -> updateVideoGrid(section, group, column));
+        authCheck(authCheck, () -> updateVideoGridInternal(section, group, column, preserveExisting));
     }
 
     private void updateVideoRows(BrowseSection section, Observable<List<MediaGroup>> groups) {
@@ -761,7 +780,7 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
         mActions.add(updateAction);
     }
 
-    private void updateVideoGrid(BrowseSection section, Observable<MediaGroup> group, int column) {
+    private void updateVideoGridInternal(BrowseSection section, Observable<MediaGroup> group, int column, boolean preserveExisting) {
         disposeActions();
 
         if (getView() == null) {
@@ -774,16 +793,19 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
 
         getView().showProgressBar(true);
 
-        // Stay on the same group in case of multiple subscribe calls
-        VideoGroup baseGroup = VideoGroup.from(section, column);
-        baseGroup.setAction(VideoGroup.ACTION_REPLACE);
-        getView().updateSection(baseGroup);
+        // Keep the current grid visible during manual refresh.
+        if (!preserveExisting) {
+            VideoGroup baseGroup = VideoGroup.from(section, column);
+            baseGroup.setAction(VideoGroup.ACTION_REPLACE);
+            getView().updateSection(baseGroup);
+        }
 
         if (group == null) {
-            // No group. Maybe just clear.
             getView().showProgressBar(false);
             return;
         }
+
+        final boolean[] firstEmission = { true };
 
         Disposable updateAction = group
                 .subscribe(
@@ -796,11 +818,23 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
                                 return;
                             }
 
-                            VideoGroup videoGroup = VideoGroup.from(baseGroup, mediaGroup);
+                            boolean replaceGrid = preserveExisting ||
+                                    (!firstEmission[0] && isLocalChannelGroupSection(section));
+                            Video selectedVideo = replaceGrid && isCurrentSection(section) ? mCurrentVideo : null;
+
+                            VideoGroup videoGroup = VideoGroup.from(mediaGroup, section, column);
+                            videoGroup.setAction(replaceGrid ? VideoGroup.ACTION_REPLACE : VideoGroup.ACTION_APPEND);
+                            firstEmission[0] = false;
+
                             appendLocalHistory(videoGroup);
                             getView().updateSection(videoGroup);
-                            mBrowseProcessor.process(videoGroup);
 
+                            // Restore selection after replacing stale data.
+                            if (selectedVideo != null && getView() != null && isCurrentSection(section)) {
+                                getView().selectSectionItem(selectedVideo);
+                            }
+
+                            mBrowseProcessor.process(videoGroup);
                             continueGroupIfNeeded(videoGroup);
                         },
                         error -> {
@@ -1049,9 +1083,35 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
         return Helpers.equalsAny(mediaGroup.getTitle(), getContext().getString(R.string.trending_row_name)) ? 0 : -1;
     }
 
+    private boolean invalidateLocalGroupCache() {
+        if (!isLocalChannelGroupSection(mCurrentSection)) {
+            return false;
+        }
+
+        Video item = (Video) mCurrentSection.getData();
+        MediaServiceManager.instance().invalidateRssCache(findChannelIdsForGroup(item));
+        return true;
+    }
+
+    private boolean isLocalChannelGroupSection(BrowseSection section) {
+        if (section == null || !(section.getData() instanceof Video)) {
+            return false;
+        }
+
+        return ((Video) section.getData()).channelGroupId != null;
+    }
+
+    private boolean isCurrentSection(BrowseSection section) {
+        return section != null && mCurrentSection != null && section.getId() == mCurrentSection.getId();
+    }
+
+    private String[] findChannelIdsForGroup(Video item) {
+        return ChannelGroupServiceWrapper.instance(getContext()).findChannelIdsForGroup(item.channelGroupId);
+    }
+
     private Observable<MediaGroup> createPinnedGridAction(Video item) {
         if (item.channelGroupId != null) {
-            return getContentService().getRssFeedObserve(ChannelGroupServiceWrapper.instance(getContext()).findChannelIdsForGroup(item.channelGroupId));
+            return getContentService().getRssFeedObserve(findChannelIdsForGroup(item));
         }
 
         return ChannelUploadsPresenter.instance(getContext()).obtainUploadsObservable(item);

@@ -116,6 +116,10 @@ public class MediaServiceManager implements OnAccountChange {
         return sInstance;
     }
 
+    public void invalidateRssCache(String... channelIds) {
+        YouTubeServiceManager.invalidateRssCache(channelIds);
+    }
+
     public void loadMetadata(MediaItem mediaItem, OnMetadata onMetadata) {
         loadMetadata(mediaItem, onMetadata, null, null);
     }

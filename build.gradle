@@ -1,6 +1,23 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 apply from: gradle.ext.sharedModulesConstants
 
+// Apply MediaServiceCore changes while the submodule is pinned to an older revision.
+// Remove this block after updating the submodule to a revision that contains them.
+def applyMediaServiceCoreOverride = { String relativePath ->
+    def sourceFile = file("integration/MediaServiceCore/" + relativePath)
+    def targetFile = new File(gradle.ext.mediaServiceCoreRoot, relativePath)
+
+    if (sourceFile.exists()) {
+        targetFile.parentFile.mkdirs()
+        targetFile.bytes = sourceFile.bytes
+    }
+}
+
+applyMediaServiceCoreOverride("youtubeapi/src/main/java/com/liskovsoft/youtubeapi/rss/RssService.kt")
+applyMediaServiceCoreOverride("youtubeapi/src/main/java/com/liskovsoft/youtubeapi/service/YouTubeContentService.java")
+applyMediaServiceCoreOverride("youtubeapi/src/main/java/com/liskovsoft/youtubeapi/service/YouTubeServiceManager.java")
+
+
 // NOT working
 // Running 'gradle wrapper' will generate gradlew
 wrapper {
