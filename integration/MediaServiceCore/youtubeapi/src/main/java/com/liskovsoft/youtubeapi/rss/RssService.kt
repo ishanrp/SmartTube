@@ -86,10 +86,14 @@ internal object RssService {
             val ids = channelIds.take(MAX_ITEMS)
             val now = System.currentTimeMillis()
 
-            val staleIds = ids.filter { channelId ->
+            val staleSnapshot = ids.mapNotNull { channelId ->
                 val cached = loadCache(channelId)
-                cached != null && isUsableStale(cached, now)
-            }
+                if (cached != null && isUsableStale(cached, now)) {
+                    channelId to cached.fetchedAtMs
+                } else {
+                    null
+                }
+            }.toMap()
 
             val initial = fetchFeedsSafe(ids, scheduleStaleRefresh = false)
 
@@ -104,8 +108,17 @@ internal object RssService {
                 emitter.onNext(buildGroup(initial, -1))
             }
 
-            if (staleIds.isNotEmpty() && refreshChannels(staleIds) && !emitter.isDisposed) {
-                emitter.onNext(buildGroup(collectCached(ids), -1))
+            if (staleSnapshot.isNotEmpty()) {
+                refreshChannels(staleSnapshot.keys.toList())
+
+                val cacheChanged = staleSnapshot.any { (channelId, fetchedAtMs) ->
+                    val refreshed = loadCache(channelId)
+                    refreshed != null && refreshed.fetchedAtMs > fetchedAtMs
+                }
+
+                if (cacheChanged && !emitter.isDisposed) {
+                    emitter.onNext(buildGroup(collectCached(ids), -1))
+                }
             }
 
             if (!emitter.isDisposed) {
