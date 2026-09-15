@@ -27,20 +27,20 @@ internal data class CachedRssItem(
 ) {
     fun toMediaItem(): MediaItem {
         return YouTubeMediaItem().apply {
-            setTitle(title)
-            setSecondTitle(secondTitle)
-            setVideoId(videoId)
-            setChannelId(channelId)
-            setCardImageUrl(cardImageUrl)
-            setPublishedDate(publishedDate)
-            setUpdatedDate(updatedDate)
-            setAuthor(author)
-            setDescription(description)
-            setViewCount(viewCount)
-            setBadgeText(badgeText)
-            setLive(isLive)
-            setUpcoming(isUpcoming)
-            setVideoPreviewUrl(videoPreviewUrl)
+            setTitle(this@CachedRssItem.title)
+            setSecondTitle(this@CachedRssItem.secondTitle)
+            setVideoId(this@CachedRssItem.videoId)
+            setChannelId(this@CachedRssItem.channelId)
+            setCardImageUrl(this@CachedRssItem.cardImageUrl)
+            setPublishedDate(this@CachedRssItem.publishedDate)
+            setUpdatedDate(this@CachedRssItem.updatedDate)
+            setAuthor(this@CachedRssItem.author)
+            setDescription(this@CachedRssItem.description)
+            setViewCount(this@CachedRssItem.viewCount)
+            setBadgeText(this@CachedRssItem.badgeText)
+            setLive(this@CachedRssItem.isLive)
+            setUpcoming(this@CachedRssItem.isUpcoming)
+            setVideoPreviewUrl(this@CachedRssItem.videoPreviewUrl)
         }
     }
 
