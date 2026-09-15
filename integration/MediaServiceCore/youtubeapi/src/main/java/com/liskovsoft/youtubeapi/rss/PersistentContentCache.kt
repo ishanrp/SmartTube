@@ -86,25 +86,6 @@ internal class PersistentContentCache<T : Any>(
     }
 
     @Synchronized
-    fun loadAll(): List<T> {
-        val result = mutableListOf<T>()
-
-        directory.listFiles()?.forEach { file ->
-            if (!file.isFile || file.name.endsWith(".tmp")) {
-                return@forEach
-            }
-
-            try {
-                gson.fromJson(file.readText(), type)?.let { result.add(it) }
-            } catch (e: Exception) {
-                file.delete()
-            }
-        }
-
-        return result
-    }
-
-    @Synchronized
     fun stats(
         freshTtlMs: Long,
         staleTtlMs: Long,
