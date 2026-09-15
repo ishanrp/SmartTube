@@ -36,15 +36,15 @@ class RssCacheModelsTest {
         assertEquals(source.channelId, restored.channelId)
         assertEquals(source.cardImageUrl, restored.cardImageUrl)
         assertEquals(source.publishedDate, restored.publishedDate)
-        assertEquals(source.updatedDate, restored.updatedDate)
         assertEquals(source.author, restored.author)
-        assertEquals(source.description, restored.description)
-        assertEquals(source.viewCount, restored.viewCount)
         assertEquals(source.badgeText, restored.badgeText)
         assertTrue(restored.isLive)
         assertFalse(restored.isUpcoming)
 
-        // User/profile state is deliberately not persisted in the shared channel cache.
+        // Optional detail/profile state is deliberately not persisted in the channel cache.
+        assertEquals(0, restored.updatedDate)
+        assertEquals(null, restored.description)
+        assertEquals(0, restored.viewCount)
         assertEquals(-1, restored.percentWatched)
     }
 }
