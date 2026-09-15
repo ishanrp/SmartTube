@@ -13,9 +13,14 @@ def applyMediaServiceCoreOverride = { String relativePath ->
     }
 }
 
+applyMediaServiceCoreOverride("youtubeapi/src/main/java/com/liskovsoft/youtubeapi/rss/PersistentContentCache.kt")
+applyMediaServiceCoreOverride("youtubeapi/src/main/java/com/liskovsoft/youtubeapi/rss/RssCacheModels.kt")
+applyMediaServiceCoreOverride("youtubeapi/src/main/java/com/liskovsoft/youtubeapi/rss/RssDiagnostics.kt")
+applyMediaServiceCoreOverride("youtubeapi/src/main/java/com/liskovsoft/youtubeapi/rss/RssRuntimeState.kt")
 applyMediaServiceCoreOverride("youtubeapi/src/main/java/com/liskovsoft/youtubeapi/rss/RssService.kt")
 applyMediaServiceCoreOverride("youtubeapi/src/main/java/com/liskovsoft/youtubeapi/service/YouTubeContentService.java")
 applyMediaServiceCoreOverride("youtubeapi/src/main/java/com/liskovsoft/youtubeapi/service/YouTubeServiceManager.java")
+applyMediaServiceCoreOverride("youtubeapi/src/test/java/com/liskovsoft/youtubeapi/rss/RssCacheModelsTest.kt")
 
 
 // NOT working

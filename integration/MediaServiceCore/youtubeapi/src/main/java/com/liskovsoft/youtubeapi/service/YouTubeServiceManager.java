@@ -16,6 +16,7 @@ import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.sharedutils.rx.RxHelper;
 import com.liskovsoft.youtubeapi.app.AppService;
 import com.liskovsoft.youtubeapi.channelgroups.ChannelGroupServiceImpl;
+import com.liskovsoft.youtubeapi.rss.RssDiagnostics;
 import com.liskovsoft.youtubeapi.rss.RssService;
 import com.liskovsoft.googlecommon.common.locale.LocaleManager;
 import com.liskovsoft.youtubeapi.service.internal.MediaServiceData;
@@ -42,6 +43,30 @@ public class YouTubeServiceManager implements ServiceManager {
 
     public static void invalidateRssCache(String... channelIds) {
         RssService.invalidate(channelIds);
+    }
+
+    public static void clearRssCache() {
+        RssService.clearCache();
+    }
+
+    public static int getRssParallelRequests() {
+        return RssService.getParallelRequests();
+    }
+
+    public static void setRssParallelRequests(int value) {
+        RssService.setParallelRequests(value);
+    }
+
+    public static String getRssStatus() {
+        return RssService.getStatus();
+    }
+
+    public static long getRssBackoffRemainingMs() {
+        return RssService.getBackoffRemainingMs();
+    }
+
+    public static RssDiagnostics getRssDiagnostics() {
+        return RssService.getDiagnostics();
     }
 
     @Override

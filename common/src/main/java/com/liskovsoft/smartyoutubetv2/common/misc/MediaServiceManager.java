@@ -29,6 +29,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.common.utils.LoadingManager;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
+import com.liskovsoft.youtubeapi.rss.RssDiagnostics;
 import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
 
 import io.reactivex.Observable;
@@ -118,6 +119,30 @@ public class MediaServiceManager implements OnAccountChange {
 
     public void invalidateRssCache(String... channelIds) {
         YouTubeServiceManager.invalidateRssCache(channelIds);
+    }
+
+    public void clearRssCache() {
+        YouTubeServiceManager.clearRssCache();
+    }
+
+    public int getRssParallelRequests() {
+        return YouTubeServiceManager.getRssParallelRequests();
+    }
+
+    public void setRssParallelRequests(int value) {
+        YouTubeServiceManager.setRssParallelRequests(value);
+    }
+
+    public String getRssStatus() {
+        return YouTubeServiceManager.getRssStatus();
+    }
+
+    public long getRssBackoffRemainingMs() {
+        return YouTubeServiceManager.getRssBackoffRemainingMs();
+    }
+
+    public RssDiagnostics getRssDiagnostics() {
+        return YouTubeServiceManager.getRssDiagnostics();
     }
 
     public void loadMetadata(MediaItem mediaItem, OnMetadata onMetadata) {

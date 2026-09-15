@@ -756,4 +756,29 @@
         <item quantity="one">%s second</item>
         <item quantity="other">%s seconds</item>
     </plurals>
+
+    <string name="subscription_feed_parallel_requests">Subscription feed parallel requests</string>
+    <string name="network_diagnostics">Network diagnostics</string>
+    <string name="network_diag_status">YouTube status: %1$s</string>
+    <string name="network_diag_status_normal">Normal</string>
+    <string name="network_diag_status_degraded">Degraded</string>
+    <string name="network_diag_status_throttled">Throttled</string>
+    <string name="network_diag_status_recovering">Recovering</string>
+    <string name="network_diag_last_issue">Last issue: %1$s</string>
+    <string name="network_diag_backoff">Backoff remaining: %1$s</string>
+    <string name="network_diag_backoff_level">Backoff level: %1$d</string>
+    <string name="network_diag_feed_mode">Feed mode: %1$s</string>
+    <string name="network_diag_parallel">Requests (limit/active/queued): %1$d/%2$d/%3$d</string>
+    <string name="network_diag_last_success">Last successful RSS fetch: %1$s</string>
+    <string name="network_diag_cache_entries">Disk cache (total/fresh/stale/old): %1$d/%2$d/%3$d/%4$d</string>
+    <string name="network_diag_cache_size">Cache size: %1$s (memory entries: %2$d)</string>
+    <string name="network_diag_failures">Failures (429/timeout/other): %1$d/%2$d/%3$d</string>
+    <string name="network_diag_recent_events">Recent feed events</string>
+    <string name="network_diag_copy">Copy diagnostics</string>
+    <string name="network_diag_copied">Diagnostics copied to clipboard</string>
+    <string name="network_diag_clear_cache">Clear subscription feed cache</string>
+    <string name="network_diag_clear_cache_confirm">Clear the saved subscription feed cache?</string>
+    <string name="network_diag_none">None</string>
+    <string name="network_diag_never">Never</string>
+    <string name="network_diag_ago">%1$s ago</string>
 </resources>
