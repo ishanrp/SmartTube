@@ -16,10 +16,7 @@ internal data class CachedRssItem(
     val channelId: String?,
     val cardImageUrl: String?,
     val publishedDate: Long,
-    val updatedDate: Long,
     val author: String?,
-    val description: String?,
-    val viewCount: Int,
     val badgeText: String?,
     val isLive: Boolean,
     val isUpcoming: Boolean,
@@ -33,10 +30,7 @@ internal data class CachedRssItem(
             setChannelId(this@CachedRssItem.channelId)
             setCardImageUrl(this@CachedRssItem.cardImageUrl)
             setPublishedDate(this@CachedRssItem.publishedDate)
-            setUpdatedDate(this@CachedRssItem.updatedDate)
             setAuthor(this@CachedRssItem.author)
-            setDescription(this@CachedRssItem.description)
-            setViewCount(this@CachedRssItem.viewCount)
             setBadgeText(this@CachedRssItem.badgeText)
             setLive(this@CachedRssItem.isLive)
             setUpcoming(this@CachedRssItem.isUpcoming)
@@ -46,8 +40,6 @@ internal data class CachedRssItem(
 
     companion object {
         fun fromMediaItem(item: MediaItem): CachedRssItem {
-            val youtubeItem = item as? YouTubeMediaItem
-
             return CachedRssItem(
                 title = item.title,
                 secondTitle = item.secondTitle?.toString(),
@@ -55,10 +47,7 @@ internal data class CachedRssItem(
                 channelId = item.channelId,
                 cardImageUrl = item.cardImageUrl,
                 publishedDate = item.publishedDate,
-                updatedDate = youtubeItem?.updatedDate ?: 0,
                 author = item.author,
-                description = youtubeItem?.description,
-                viewCount = youtubeItem?.viewCount ?: 0,
                 badgeText = item.badgeText,
                 isLive = item.isLive,
                 isUpcoming = item.isUpcoming,

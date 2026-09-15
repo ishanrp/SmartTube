@@ -25,21 +25,33 @@ import okhttp3.Request
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.Collections
+import java.util.LinkedHashMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 internal object RssService {
     private const val RSS_URL: String = "https://www.youtube.com/feeds/videos.xml?channel_id="
     private const val MAX_ITEMS = 100
-    private const val CACHE_SCHEMA_VERSION = 1
+    private const val MAX_MEMORY_CACHE_ENTRIES = 8
+    private const val LOCK_STRIPES = 32
+    private const val CACHE_SCHEMA_VERSION = 2
     private const val FRESH_TTL_MS = 10 * 60 * 1000L
     private const val STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000L
     private const val DISK_RETENTION_MS = 30 * 24 * 60 * 60 * 1000L
     private const val FAILURE_BACKOFF_MS = 5 * 60 * 1000L
 
-    private val feedCache = ConcurrentHashMap<String, RssCacheEntry>()
+    private val feedCacheLock = Any()
+    private val feedCache = object : LinkedHashMap<String, RssCacheEntry>(
+        MAX_MEMORY_CACHE_ENTRIES,
+        0.75f,
+        true
+    ) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, RssCacheEntry>?
+        ): Boolean = size > MAX_MEMORY_CACHE_ENTRIES
+    }
     private val retryAfterMs = ConcurrentHashMap<String, Long>()
-    private val channelLocks = ConcurrentHashMap<String, Mutex>()
+    private val channelLocks = Array(LOCK_STRIPES) { Mutex() }
     private val refreshesInFlight =
         Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
     private val diskCache = PersistentContentCache(
@@ -108,7 +120,9 @@ internal object RssService {
             val cached = loadCache(channelId)
 
             if (cached != null) {
-                feedCache[channelId] = cached.copy(fetchedAtMs = 0)
+                val invalidated = cached.copy(fetchedAtMs = 0)
+                memoryPut(channelId, invalidated)
+                diskCache.save(channelId, invalidated)
             }
 
             retryAfterMs.remove(channelId)
@@ -119,7 +133,7 @@ internal object RssService {
 
     @JvmStatic
     fun clearCache() {
-        feedCache.clear()
+        memoryClear()
         retryAfterMs.clear()
         diskCache.clear()
         RssRuntimeState.addEvent("Subscription feed cache cleared")
@@ -155,7 +169,7 @@ internal object RssService {
             queuedRequests = queuedRequests.get(),
             lastSuccessfulFetchMs = RssRuntimeState.lastSuccessfulFetchMs(),
             feedMode = RssRuntimeState.feedMode(),
-            memoryEntries = feedCache.size,
+            memoryEntries = memorySize(),
             diskEntries = diskStats.entryCount,
             freshEntries = diskStats.freshEntries,
             staleEntries = diskStats.staleEntries,
@@ -193,17 +207,24 @@ internal object RssService {
         channelIds: List<String>,
         scheduleStaleRefresh: Boolean
     ): MutableList<MediaItem> = runBlocking {
-        coroutineScope {
-            channelIds
-                .map { channelId ->
-                    async {
-                        fetchFeedCached(channelId, scheduleStaleRefresh)
+        val result = mutableListOf<MediaItem>()
+        val batchSize = RssRuntimeState.getParallelRequests().coerceAtLeast(1)
+
+        for (batch in channelIds.chunked(batchSize)) {
+            val batchItems = coroutineScope {
+                batch
+                    .map { channelId ->
+                        async {
+                            fetchFeedCached(channelId, scheduleStaleRefresh)
+                        }
                     }
-                }
-                .mapNotNull { it.await() }
-                .flatten()
-                .toMutableList()
+                    .mapNotNull { it.await() }
+            }
+
+            batchItems.forEach { result.addAll(it) }
         }
+
+        result
     }
 
     private suspend fun fetchFeedCached(
@@ -285,12 +306,26 @@ internal object RssService {
     }
 
     private fun refreshChannels(channelIds: List<String>): Boolean = runBlocking {
-        coroutineScope {
-            channelIds
-                .map { channelId -> async { refreshChannel(channelId) } }
-                .map { it.await() }
-                .any { it }
+        val batchSize = RssRuntimeState.getParallelRequests().coerceAtLeast(1)
+        var refreshed = false
+
+        for (batch in channelIds.chunked(batchSize)) {
+            val batchRefreshed = coroutineScope {
+                batch
+                    .map { channelId -> async { refreshChannel(channelId) } }
+                    .map { it.await() }
+            }
+
+            if (batchRefreshed.any { it }) {
+                refreshed = true
+            }
+
+            if (!RssRuntimeState.canRequest()) {
+                break
+            }
         }
+
+        refreshed
     }
 
     private suspend fun refreshChannel(channelId: String): Boolean {
@@ -421,7 +456,7 @@ internal object RssService {
             items = items.map(CachedRssItem::fromMediaItem)
         )
 
-        feedCache[channelId] = entry
+        memoryPut(channelId, entry)
         diskCache.save(channelId, entry)
         retryAfterMs.remove(channelId)
 
@@ -439,11 +474,7 @@ internal object RssService {
     }
 
     private fun loadCache(channelId: String): RssCacheEntry? {
-        val memory = feedCache[channelId]
-
-        if (memory != null) {
-            return memory
-        }
+        memoryGet(channelId)?.let { return it }
 
         val disk = diskCache.load(channelId) ?: return null
 
@@ -452,9 +483,31 @@ internal object RssService {
             return null
         }
 
-        val previous = feedCache.putIfAbsent(channelId, disk)
-        return previous ?: disk
+        memoryPut(channelId, disk)
+        return disk
     }
+
+    private fun memoryGet(channelId: String): RssCacheEntry? =
+        synchronized(feedCacheLock) {
+            feedCache[channelId]
+        }
+
+    private fun memoryPut(channelId: String, entry: RssCacheEntry) {
+        synchronized(feedCacheLock) {
+            feedCache[channelId] = entry
+        }
+    }
+
+    private fun memoryClear() {
+        synchronized(feedCacheLock) {
+            feedCache.clear()
+        }
+    }
+
+    private fun memorySize(): Int =
+        synchronized(feedCacheLock) {
+            feedCache.size
+        }
 
     private fun materialize(entry: RssCacheEntry): List<MediaItem> {
         return entry.items.map(CachedRssItem::toMediaItem)
@@ -473,14 +526,8 @@ internal object RssService {
         (retryAfterMs[channelId] ?: 0L) > now
 
     private fun channelLock(channelId: String): Mutex {
-        val current = channelLocks[channelId]
-
-        if (current != null) {
-            return current
-        }
-
-        val created = Mutex()
-        return channelLocks.putIfAbsent(channelId, created) ?: created
+        val index = (channelId.hashCode() and Int.MAX_VALUE) % LOCK_STRIPES
+        return channelLocks[index]
     }
 
     /**
