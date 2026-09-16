@@ -312,7 +312,22 @@ public final class LeanbackPlayerAdapter extends PlayerAdapter implements Runnab
     @Override
     public void onVideoSizeChanged(
         int width, int height, int unappliedRotationDegrees, float pixelWidthHeightRatio) {
-      getCallback().onVideoSizeChanged(LeanbackPlayerAdapter.this, width, height);
+      // Forward the video's display dimensions rather than its raw encoded dimensions.
+      // Portrait videos/Shorts may be encoded landscape with 90/270 degree rotation metadata,
+      // and non-square pixels also change the effective display aspect ratio. Dropping these
+      // values makes the Leanback surface size such videos to the TV width instead of fitting
+      // them to the available height.
+      int displayWidth = Math.round(width * pixelWidthHeightRatio);
+      int displayHeight = height;
+
+      if (unappliedRotationDegrees == 90 || unappliedRotationDegrees == 270) {
+        int rotatedWidth = displayHeight;
+        displayHeight = displayWidth;
+        displayWidth = rotatedWidth;
+      }
+
+      getCallback().onVideoSizeChanged(
+          LeanbackPlayerAdapter.this, displayWidth, displayHeight);
     }
 
     @Override
