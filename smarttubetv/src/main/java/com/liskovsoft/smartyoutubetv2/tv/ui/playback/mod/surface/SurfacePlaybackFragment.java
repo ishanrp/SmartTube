@@ -71,7 +71,9 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
         // while keeping the cheaper SurfaceView path for normal landscape playback.
         if (mVideoAspectRatio > 0 && mVideoAspectRatio < 1 &&
                 mVideoSurfaceWrapper instanceof SurfaceViewWrapper) {
-            switchToTextureView();
+            if (switchToTextureView()) {
+                ((PlayerEngine) this).restartEngine();
+            }
         }
     }
 
@@ -118,9 +120,9 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
 
         if (mVideoSurfaceWrapper instanceof TextureViewWrapper) {
             mVideoSurfaceRoot.setRotation(angle);
-        } else {
-            switchToTextureView();
+        } else if (switchToTextureView()) {
             mVideoSurfaceRoot.setRotation(angle);
+            ((PlayerEngine) this).restartEngine();
         }
     }
 
@@ -133,25 +135,22 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
 
         if (mVideoSurfaceWrapper instanceof TextureViewWrapper) {
             mVideoSurfaceRoot.setScaleX(scaleX);
-        } else {
-            switchToTextureView();
+        } else if (switchToTextureView()) {
             mVideoSurfaceRoot.setScaleX(scaleX);
+            ((PlayerEngine) this).restartEngine();
         }
     }
 
-    private void switchToTextureView() {
+    private boolean switchToTextureView() {
         if (mVideoSurfaceWrapper == null || mVideoSurfaceWrapper instanceof TextureViewWrapper ||
                 getView() == null) {
-            return;
+            return false;
         }
 
         mVideoSurfaceRoot.removeView(mVideoSurfaceWrapper.getSurfaceView());
         mVideoSurfaceWrapper = new TextureViewWrapper(getContext(), (ViewGroup) getView());
         mVideoSurfaceRoot.addView(mVideoSurfaceWrapper.getSurfaceView(), 0);
-
-        // The player is still bound to the old Surface. Recreate it so Leanback attaches MediaCodec
-        // to the new TextureView-backed Surface, matching the existing rotation/flip behavior.
-        ((PlayerEngine) this).restartEngine();
+        return true;
     }
 
     private void scaleIfNeeded() {
