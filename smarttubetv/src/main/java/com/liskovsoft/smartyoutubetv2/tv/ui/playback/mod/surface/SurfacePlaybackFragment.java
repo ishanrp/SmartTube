@@ -64,6 +64,15 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
     protected void onVideoSizeChanged(int width, int height) {
         mVideoAspectRatio = ((float) width) / height;
         mVideoSurfaceRoot.setAspectRatio(calculateAspectRatio());
+
+        // Some Android TV devices distort portrait video when MediaCodec renders through a
+        // SurfaceView. SmartTube's existing manual-rotation path already avoids the same device
+        // behavior by switching to TextureView. Do the same automatically for portrait video,
+        // while keeping the cheaper SurfaceView path for normal landscape playback.
+        if (mVideoAspectRatio > 0 && mVideoAspectRatio < 1 &&
+                mVideoSurfaceWrapper instanceof SurfaceViewWrapper) {
+            switchToTextureView();
+        }
     }
 
     /**
@@ -110,12 +119,8 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
         if (mVideoSurfaceWrapper instanceof TextureViewWrapper) {
             mVideoSurfaceRoot.setRotation(angle);
         } else {
-            mVideoSurfaceRoot.removeView(mVideoSurfaceWrapper.getSurfaceView());
-            mVideoSurfaceWrapper = new TextureViewWrapper(getContext(), (ViewGroup) getView());
-            mVideoSurfaceRoot.addView(mVideoSurfaceWrapper.getSurfaceView(), 0);
+            switchToTextureView();
             mVideoSurfaceRoot.setRotation(angle);
-
-            ((PlayerEngine) this).restartEngine();
         }
     }
 
@@ -129,13 +134,24 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
         if (mVideoSurfaceWrapper instanceof TextureViewWrapper) {
             mVideoSurfaceRoot.setScaleX(scaleX);
         } else {
-            mVideoSurfaceRoot.removeView(mVideoSurfaceWrapper.getSurfaceView());
-            mVideoSurfaceWrapper = new TextureViewWrapper(getContext(), (ViewGroup) getView());
-            mVideoSurfaceRoot.addView(mVideoSurfaceWrapper.getSurfaceView(), 0);
+            switchToTextureView();
             mVideoSurfaceRoot.setScaleX(scaleX);
-
-            ((PlayerEngine) this).restartEngine();
         }
+    }
+
+    private void switchToTextureView() {
+        if (mVideoSurfaceWrapper == null || mVideoSurfaceWrapper instanceof TextureViewWrapper ||
+                getView() == null) {
+            return;
+        }
+
+        mVideoSurfaceRoot.removeView(mVideoSurfaceWrapper.getSurfaceView());
+        mVideoSurfaceWrapper = new TextureViewWrapper(getContext(), (ViewGroup) getView());
+        mVideoSurfaceRoot.addView(mVideoSurfaceWrapper.getSurfaceView(), 0);
+
+        // The player is still bound to the old Surface. Recreate it so Leanback attaches MediaCodec
+        // to the new TextureView-backed Surface, matching the existing rotation/flip behavior.
+        ((PlayerEngine) this).restartEngine();
     }
 
     private void scaleIfNeeded() {
