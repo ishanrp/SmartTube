@@ -1,0 +1,70 @@
+name: Subscription Cache V2 Test APK
+
+on:
+  push:
+    branches: [ "subscription-cache-v2" ]
+  workflow_dispatch:
+
+concurrency:
+  group: subscription-cache-v2-test
+  cancel-in-progress: true
+
+jobs:
+  build-test-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+
+      - name: Prepare stable cache-v2 test signing
+        shell: bash
+        run: |
+          cat <<'EOF' | base64 --decode > cachev2-test.keystore
+          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
+          EOF
+          cat > keystore.properties <<'EOF'
+          storeFile=../cachev2-test.keystore
+          storePassword=cachev2test
+          keyAlias=cachev2test
+          keyPassword=cachev2test
+          EOF
+
+      - name: Mark as cache v2 test build
+        id: get_version
+        run: |
+          sed -i "s/versionName \"\\(.*\\)\"/versionName \"\\1-cachev2-${{ github.run_number }}\"/" smarttubetv/build.gradle
+          echo "VERSION_NAME=$(grep "versionName" smarttubetv/build.gradle | head -n 1 | awk -F'"' '{print $2}')" >> $GITHUB_OUTPUT
+
+      - name: Grant Gradle permissions
+        run: chmod +x gradlew
+
+      - name: Test RSS cache models
+        run: ./gradlew :youtubeapi:testStbetaDebugUnitTest --tests com.liskovsoft.youtubeapi.rss.RssCacheModelsTest
+
+      - name: Build installable debug APK
+        run: ./gradlew clean assembleStbetaDebug
+
+      - name: Upload Universal APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: SmartTube_${{ steps.get_version.outputs.VERSION_NAME }}_universal
+          path: ./smarttubetv/build/outputs/apk/stbeta/debug/*_universal.apk
+          if-no-files-found: error
+
+      - name: Upload ARM64 APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: SmartTube_${{ steps.get_version.outputs.VERSION_NAME }}_arm64
+          path: ./smarttubetv/build/outputs/apk/stbeta/debug/*_arm64-v8a.apk
+          if-no-files-found: error
