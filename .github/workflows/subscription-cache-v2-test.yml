@@ -9,6 +9,9 @@ concurrency:
   group: subscription-cache-v2-test
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   build-test-apk:
     runs-on: ubuntu-latest
@@ -29,16 +32,29 @@ jobs:
 
       - name: Prepare stable cache-v2 test signing
         shell: bash
+        env:
+          CACHEV2_KEYSTORE_B64: ${{ secrets.CACHEV2_KEYSTORE_B64 }}
+          CACHEV2_KEYSTORE_PASSWORD: ${{ secrets.CACHEV2_KEYSTORE_PASSWORD }}
+          CACHEV2_KEY_ALIAS: ${{ secrets.CACHEV2_KEY_ALIAS }}
+          CACHEV2_KEY_PASSWORD: ${{ secrets.CACHEV2_KEY_PASSWORD }}
         run: |
-          cat <<'EOF' | base64 --decode > cachev2-test.keystore
-          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
-          EOF
-          cat > keystore.properties <<'EOF'
-          storeFile=../cachev2-test.keystore
-          storePassword=cachev2test
-          keyAlias=cachev2test
-          keyPassword=cachev2test
-          EOF
+          set -euo pipefail
+          if [[ -z "$CACHEV2_KEYSTORE_B64" || -z "$CACHEV2_KEYSTORE_PASSWORD" || -z "$CACHEV2_KEY_ALIAS" || -z "$CACHEV2_KEY_PASSWORD" ]]; then
+            echo "::error::Cache-v2 signing secrets are not configured."
+            exit 1
+          fi
+
+          umask 077
+          printf '%s' "$CACHEV2_KEYSTORE_B64" | base64 --decode > cachev2-test.keystore
+          {
+            printf 'storeFile=../cachev2-test.keystore\n'
+            printf 'storePassword=%s\n' "$CACHEV2_KEYSTORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$CACHEV2_KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$CACHEV2_KEY_PASSWORD"
+          } > keystore.properties
+
+          export CACHEV2_STOREPASS="$CACHEV2_KEYSTORE_PASSWORD"
+          keytool -list -keystore cachev2-test.keystore -storepass:env CACHEV2_STOREPASS -alias "$CACHEV2_KEY_ALIAS" >/dev/null
 
       - name: Mark as cache v2 test build
         id: get_version
@@ -68,3 +84,9 @@ jobs:
           name: SmartTube_${{ steps.get_version.outputs.VERSION_NAME }}_arm64
           path: ./smarttubetv/build/outputs/apk/stbeta/debug/*_arm64-v8a.apk
           if-no-files-found: error
+
+      - name: Remove signing material
+        if: always()
+        shell: bash
+        run: rm -f cachev2-test.keystore keystore.properties
+
