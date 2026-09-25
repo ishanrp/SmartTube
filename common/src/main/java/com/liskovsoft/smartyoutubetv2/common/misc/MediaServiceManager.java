@@ -29,6 +29,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.common.utils.LoadingManager;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
+import com.liskovsoft.youtubeapi.rss.RssDiagnostics;
 import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
 
 import io.reactivex.Observable;
@@ -114,6 +115,34 @@ public class MediaServiceManager implements OnAccountChange {
         }
 
         return sInstance;
+    }
+
+    public void invalidateRssCache(String... channelIds) {
+        YouTubeServiceManager.invalidateRssCache(channelIds);
+    }
+
+    public void clearRssCache() {
+        YouTubeServiceManager.clearRssCache();
+    }
+
+    public int getRssParallelRequests() {
+        return YouTubeServiceManager.getRssParallelRequests();
+    }
+
+    public void setRssParallelRequests(int value) {
+        YouTubeServiceManager.setRssParallelRequests(value);
+    }
+
+    public String getRssStatus() {
+        return YouTubeServiceManager.getRssStatus();
+    }
+
+    public long getRssBackoffRemainingMs() {
+        return YouTubeServiceManager.getRssBackoffRemainingMs();
+    }
+
+    public RssDiagnostics getRssDiagnostics() {
+        return YouTubeServiceManager.getRssDiagnostics();
     }
 
     public void loadMetadata(MediaItem mediaItem, OnMetadata onMetadata) {
@@ -331,6 +360,8 @@ public class MediaServiceManager implements OnAccountChange {
             return false;
         }
 
+        MediaGroup mediaGroup = group.getMediaGroup();
+
         Pair<Integer, Long> sizeTimestamp = mContinuations.get(group.getId());
 
         long currentTimeMillis = System.currentTimeMillis();
@@ -339,7 +370,7 @@ public class MediaServiceManager implements OnAccountChange {
         }
 
         int prevSize = sizeTimestamp != null ? sizeTimestamp.first : 0;
-        int newSize = Math.max(group.getSize(), 0);
+        int newSize = mediaGroup.getMediaItems() != null ? mediaGroup.getMediaItems().size() : 0;
         int totalSize = prevSize + newSize;
 
         MainUIData mainUIData = MainUIData.instance(context);
@@ -478,7 +509,7 @@ public class MediaServiceManager implements OnAccountChange {
 
         LoadingManager.showLoading(context, true);
 
-        AtomicInteger atomicIndex = new AtomicInteger(-1);
+        AtomicInteger atomicIndex = new AtomicInteger(0);
 
         MediaServiceManager.instance().loadChannelRows(item, groups -> {
             LoadingManager.showLoading(context, false);
