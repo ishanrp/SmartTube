@@ -64,6 +64,17 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
     protected void onVideoSizeChanged(int width, int height) {
         mVideoAspectRatio = ((float) width) / height;
         mVideoSurfaceRoot.setAspectRatio(calculateAspectRatio());
+
+        // Some Android TV devices distort portrait video when MediaCodec renders through a
+        // SurfaceView. SmartTube's existing manual-rotation path already avoids the same device
+        // behavior by switching to TextureView. Do the same automatically for portrait video,
+        // while keeping the cheaper SurfaceView path for normal landscape playback.
+        if (mVideoAspectRatio > 0 && mVideoAspectRatio < 1 &&
+                mVideoSurfaceWrapper instanceof SurfaceViewWrapper) {
+            if (switchToTextureView()) {
+                ((PlayerEngine) this).restartEngine();
+            }
+        }
     }
 
     /**
@@ -109,12 +120,8 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
 
         if (mVideoSurfaceWrapper instanceof TextureViewWrapper) {
             mVideoSurfaceRoot.setRotation(angle);
-        } else {
-            mVideoSurfaceRoot.removeView(mVideoSurfaceWrapper.getSurfaceView());
-            mVideoSurfaceWrapper = new TextureViewWrapper(getContext(), (ViewGroup) getView());
-            mVideoSurfaceRoot.addView(mVideoSurfaceWrapper.getSurfaceView(), 0);
+        } else if (switchToTextureView()) {
             mVideoSurfaceRoot.setRotation(angle);
-
             ((PlayerEngine) this).restartEngine();
         }
     }
@@ -128,46 +135,59 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
 
         if (mVideoSurfaceWrapper instanceof TextureViewWrapper) {
             mVideoSurfaceRoot.setScaleX(scaleX);
-        } else {
-            mVideoSurfaceRoot.removeView(mVideoSurfaceWrapper.getSurfaceView());
-            mVideoSurfaceWrapper = new TextureViewWrapper(getContext(), (ViewGroup) getView());
-            mVideoSurfaceRoot.addView(mVideoSurfaceWrapper.getSurfaceView(), 0);
+        } else if (switchToTextureView()) {
             mVideoSurfaceRoot.setScaleX(scaleX);
-
             ((PlayerEngine) this).restartEngine();
         }
     }
 
-    private void scaleIfNeeded() {
-        if (!(mVideoSurfaceWrapper instanceof TextureViewWrapper)) {
-            return;
+    private boolean switchToTextureView() {
+        if (mVideoSurfaceWrapper == null || mVideoSurfaceWrapper instanceof TextureViewWrapper ||
+                getView() == null) {
+            return false;
         }
 
-        if (mVideoSurfaceRoot.getWidth() == 0 || mVideoSurfaceRoot.getHeight() == 0) {
+        mVideoSurfaceRoot.removeView(mVideoSurfaceWrapper.getSurfaceView());
+        mVideoSurfaceWrapper = new TextureViewWrapper(getContext(), (ViewGroup) getView());
+        mVideoSurfaceRoot.addView(mVideoSurfaceWrapper.getSurfaceView(), 0);
+        return true;
+    }
+
+    private void scaleIfNeeded() {
+        if (mVideoSurfaceWrapper == null ||
+                mVideoSurfaceRoot.getWidth() == 0 || mVideoSurfaceRoot.getHeight() == 0) {
             return;
         }
 
         float angle = mVideoSurfaceRoot.getRotation();
 
-        int width, height;
+        int width = mVideoSurfaceRoot.getWidth();
+        int height = mVideoSurfaceRoot.getHeight();
 
-        if (Helpers.floatEquals(angle, 90) || Helpers.floatEquals(angle, 270)) {
-            float ratio = mVideoSurfaceRoot.getWidth() / ((float) mVideoSurfaceRoot.getHeight());
+        // TextureView needs its unrotated bounds adjusted when the user explicitly rotates video.
+        // SurfaceView doesn't support that transform path and is replaced with TextureView by
+        // setRotation(), so for the normal TV SurfaceView path the measured aspect-root bounds are
+        // exactly the bounds the video surface must use.
+        if (mVideoSurfaceWrapper instanceof TextureViewWrapper &&
+                (Helpers.floatEquals(angle, 90) || Helpers.floatEquals(angle, 270))) {
+            float ratio = width / ((float) height);
 
-            width = mVideoSurfaceRoot.getHeight();
-            height = (int) (mVideoSurfaceRoot.getHeight() / ratio);
-        } else {
-            width = mVideoSurfaceRoot.getWidth();
-            height = mVideoSurfaceRoot.getHeight();
+            width = height;
+            height = (int) (height / ratio);
         }
 
-        // https://stackoverflow.com/questions/52196362/how-resize-textureview-to-fullscreen-when-rotation-90
-        View textureView = mVideoSurfaceWrapper.getSurfaceView();
-        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) textureView.getLayoutParams();
-        params.width = width;
-        params.height = height;
-        params.gravity = Gravity.CENTER;
-        textureView.setLayoutParams(params);
+        // Keep the actual rendering surface in lockstep with AspectRatioFrameLayout. In particular,
+        // SurfaceView can otherwise retain the full-screen bounds even after the aspect container
+        // has been narrowed for portrait video, stretching a 9:16 Short across the TV's 16:9 width.
+        View surfaceView = mVideoSurfaceWrapper.getSurfaceView();
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) surfaceView.getLayoutParams();
+
+        if (params.width != width || params.height != height || params.gravity != Gravity.CENTER) {
+            params.width = width;
+            params.height = height;
+            params.gravity = Gravity.CENTER;
+            surfaceView.setLayoutParams(params);
+        }
     }
 
     protected void setPixelRatio(float pixelRatio) {
