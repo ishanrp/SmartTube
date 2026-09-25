@@ -1,6 +1,8 @@
 package com.liskovsoft.smartyoutubetv2.common.app.presenters.settings;
 
 import android.annotation.SuppressLint;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
@@ -31,6 +33,7 @@ import com.liskovsoft.smartyoutubetv2.common.proxy.ProxyManager;
 import com.liskovsoft.smartyoutubetv2.common.proxy.WebProxyDialog;
 import com.liskovsoft.smartyoutubetv2.common.utils.AppDialogUtil;
 import com.liskovsoft.smartyoutubetv2.common.utils.SimpleEditDialog;
+import com.liskovsoft.youtubeapi.rss.RssDiagnostics;
 import com.liskovsoft.youtubeapi.service.internal.MediaServiceData;
 
 import java.util.ArrayList;
@@ -39,6 +42,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Locale;
 
 public class GeneralSettingsPresenter extends BasePresenter<Void> {
     private final GeneralData mGeneralData;
@@ -641,6 +645,217 @@ public class GeneralSettingsPresenter extends BasePresenter<Void> {
         appendConscrypt(settingsPresenter, options);
 
         settingsPresenter.appendCheckedCategory(getContext().getString(R.string.network_settings), options);
+        appendRssParallelRequests(settingsPresenter);
+        appendNetworkDiagnostics(settingsPresenter);
+    }
+
+    private void appendRssParallelRequests(AppDialogPresenter settingsPresenter) {
+        List<OptionItem> options = new ArrayList<>();
+        int current = MediaServiceManager.instance().getRssParallelRequests();
+
+        for (int value : new int[] {1, 2, 4, 6, 8}) {
+            options.add(UiOptionItem.from(
+                    String.valueOf(value),
+                    option -> MediaServiceManager.instance().setRssParallelRequests(value),
+                    current == value));
+        }
+
+        settingsPresenter.appendRadioCategory(
+                getContext().getString(R.string.subscription_feed_parallel_requests),
+                options);
+    }
+
+    private void appendNetworkDiagnostics(AppDialogPresenter settingsPresenter) {
+        MediaServiceManager serviceManager = MediaServiceManager.instance();
+        String status = getRssStatusText(serviceManager.getRssStatus());
+        long backoffMs = serviceManager.getRssBackoffRemainingMs();
+
+        if (backoffMs > 0) {
+            status += " (" + formatDuration(backoffMs) + ")";
+        }
+
+        String title = String.format(
+                "%s: %s",
+                getContext().getString(R.string.network_diagnostics),
+                status);
+
+        settingsPresenter.appendSingleButton(UiOptionItem.from(
+                title,
+                option -> showNetworkDiagnostics()));
+    }
+
+    private void showNetworkDiagnostics() {
+        RssDiagnostics diagnostics = MediaServiceManager.instance().getRssDiagnostics();
+        AppDialogPresenter dialog = AppDialogPresenter.instance(getContext());
+        List<OptionItem> status = new ArrayList<>();
+
+        status.add(UiOptionItem.from(getContext().getString(
+                R.string.network_diag_status,
+                getRssStatusText(diagnostics.getStatus()))));
+
+        if (diagnostics.getLastIssue() != null) {
+            status.add(UiOptionItem.from(getContext().getString(
+                    R.string.network_diag_last_issue,
+                    diagnostics.getLastIssue())));
+        }
+
+        status.add(UiOptionItem.from(getContext().getString(
+                R.string.network_diag_backoff,
+                diagnostics.getBackoffRemainingMs() > 0 ?
+                        formatDuration(diagnostics.getBackoffRemainingMs()) :
+                        getContext().getString(R.string.network_diag_none))));
+
+        status.add(UiOptionItem.from(getContext().getString(
+                R.string.network_diag_backoff_level,
+                diagnostics.getBackoffLevel())));
+
+        status.add(UiOptionItem.from(getContext().getString(
+                R.string.network_diag_feed_mode,
+                diagnostics.getFeedMode())));
+
+        status.add(UiOptionItem.from(getContext().getString(
+                R.string.network_diag_parallel,
+                diagnostics.getParallelRequests(),
+                diagnostics.getActiveRequests(),
+                diagnostics.getQueuedRequests())));
+
+        status.add(UiOptionItem.from(getContext().getString(
+                R.string.network_diag_last_success,
+                formatAge(diagnostics.getLastSuccessfulFetchMs()))));
+
+        status.add(UiOptionItem.from(getContext().getString(
+                R.string.network_diag_cache_entries,
+                diagnostics.getDiskEntries(),
+                diagnostics.getFreshEntries(),
+                diagnostics.getStaleEntries(),
+                diagnostics.getVeryStaleEntries())));
+
+        status.add(UiOptionItem.from(getContext().getString(
+                R.string.network_diag_cache_size,
+                formatBytes(diagnostics.getDiskBytes()),
+                diagnostics.getMemoryEntries())));
+
+        status.add(UiOptionItem.from(getContext().getString(
+                R.string.network_diag_failures,
+                diagnostics.getHttp429Failures(),
+                diagnostics.getTimeoutFailures(),
+                diagnostics.getOtherFailures())));
+
+        dialog.appendStringsCategory(getContext().getString(R.string.network_diagnostics), status);
+
+        if (!diagnostics.getRecentEvents().isEmpty()) {
+            List<OptionItem> events = new ArrayList<>();
+            for (String event : diagnostics.getRecentEvents()) {
+                events.add(UiOptionItem.from(event));
+            }
+            dialog.appendStringsCategory(getContext().getString(R.string.network_diag_recent_events), events);
+        }
+
+        dialog.appendSingleButton(UiOptionItem.from(
+                getContext().getString(R.string.network_diag_copy),
+                option -> copyNetworkDiagnostics()));
+
+        dialog.appendSingleButton(UiOptionItem.from(
+                getContext().getString(R.string.network_diag_clear_cache),
+                option -> AppDialogUtil.showConfirmationDialog(
+                        getContext(),
+                        getContext().getString(R.string.network_diag_clear_cache_confirm),
+                        () -> {
+                            MediaServiceManager.instance().clearRssCache();
+                            MessageHelpers.showMessage(getContext(), R.string.msg_done);
+                        })));
+
+        dialog.showDialog(getContext().getString(R.string.network_diagnostics));
+    }
+
+    private void copyNetworkDiagnostics() {
+        RssDiagnostics d = MediaServiceManager.instance().getRssDiagnostics();
+        StringBuilder text = new StringBuilder();
+
+        text.append("SmartTube subscription feed diagnostics\n");
+        text.append("status=").append(d.getStatus()).append('\n');
+        text.append("last_issue=").append(d.getLastIssue()).append('\n');
+        text.append("backoff_ms=").append(d.getBackoffRemainingMs()).append('\n');
+        text.append("backoff_level=").append(d.getBackoffLevel()).append('\n');
+        text.append("parallel=").append(d.getParallelRequests()).append('\n');
+        text.append("active=").append(d.getActiveRequests()).append('\n');
+        text.append("queued=").append(d.getQueuedRequests()).append('\n');
+        text.append("feed_mode=").append(d.getFeedMode()).append('\n');
+        text.append("last_success_ms=").append(d.getLastSuccessfulFetchMs()).append('\n');
+        text.append("cache_disk_entries=").append(d.getDiskEntries()).append('\n');
+        text.append("cache_fresh=").append(d.getFreshEntries()).append('\n');
+        text.append("cache_stale=").append(d.getStaleEntries()).append('\n');
+        text.append("cache_very_stale=").append(d.getVeryStaleEntries()).append('\n');
+        text.append("cache_bytes=").append(d.getDiskBytes()).append('\n');
+        text.append("failures_429=").append(d.getHttp429Failures()).append('\n');
+        text.append("failures_timeout=").append(d.getTimeoutFailures()).append('\n');
+        text.append("failures_other=").append(d.getOtherFailures()).append('\n');
+
+        for (String event : d.getRecentEvents()) {
+            text.append("event=").append(event).append('\n');
+        }
+
+        ClipboardManager clipboard =
+                (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(ClipData.newPlainText("SmartTube diagnostics", text.toString()));
+            MessageHelpers.showMessage(getContext(), R.string.network_diag_copied);
+        }
+    }
+
+    private String getRssStatusText(String status) {
+        if (RssDiagnostics.STATUS_THROTTLED.equals(status)) {
+            return getContext().getString(R.string.network_diag_status_throttled);
+        }
+
+        if (RssDiagnostics.STATUS_RECOVERING.equals(status)) {
+            return getContext().getString(R.string.network_diag_status_recovering);
+        }
+
+        if (RssDiagnostics.STATUS_DEGRADED.equals(status)) {
+            return getContext().getString(R.string.network_diag_status_degraded);
+        }
+
+        return getContext().getString(R.string.network_diag_status_normal);
+    }
+
+    private String formatAge(long timestampMs) {
+        if (timestampMs <= 0) {
+            return getContext().getString(R.string.network_diag_never);
+        }
+
+        return getContext().getString(
+                R.string.network_diag_ago,
+                formatDuration(System.currentTimeMillis() - timestampMs));
+    }
+
+    private String formatDuration(long durationMs) {
+        long totalSeconds = Math.max(0, durationMs / 1_000);
+        long hours = totalSeconds / 3_600;
+        long minutes = (totalSeconds % 3_600) / 60;
+        long seconds = totalSeconds % 60;
+
+        if (hours > 0) {
+            return String.format(Locale.US, "%dh %02dm", hours, minutes);
+        }
+
+        if (minutes > 0) {
+            return String.format(Locale.US, "%dm %02ds", minutes, seconds);
+        }
+
+        return String.format(Locale.US, "%ds", seconds);
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 1_024) {
+            return bytes + " B";
+        }
+
+        if (bytes < 1_024 * 1_024) {
+            return String.format(Locale.US, "%.1f KB", bytes / 1_024f);
+        }
+
+        return String.format(Locale.US, "%.1f MB", bytes / (1_024f * 1_024f));
     }
 
     private void appendProxyManager(AppDialogPresenter settingsPresenter, List<OptionItem> options) {
