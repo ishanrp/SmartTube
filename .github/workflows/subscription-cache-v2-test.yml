@@ -15,6 +15,8 @@ permissions:
 jobs:
   build-test-apk:
     runs-on: ubuntu-latest
+    env:
+      CACHEV2_SIGNING_READY: ${{ secrets.CACHEV2_KEYSTORE_B64 != '' && secrets.CACHEV2_KEYSTORE_PASSWORD != '' && secrets.CACHEV2_KEY_ALIAS != '' && secrets.CACHEV2_KEY_PASSWORD != '' }}
 
     steps:
       - name: Checkout Code
@@ -30,7 +32,12 @@ jobs:
           cache: 'gradle'
 
 
+      - name: Explain fallback debug signing
+        if: env.CACHEV2_SIGNING_READY != 'true'
+        run: echo '::warning::No stable signing secrets configured. Android SDK debug signing will be used; a previously installed test APK signed with a different key must be uninstalled first.'
+
       - name: Prepare stable cache-v2 test signing
+        if: env.CACHEV2_SIGNING_READY == 'true'
         shell: bash
         env:
           CACHEV2_KEYSTORE_B64: ${{ secrets.CACHEV2_KEYSTORE_B64 }}
